@@ -100,11 +100,13 @@ const articlesData: Article[] = [
 const categories = ["All", "Getting Started", "Configuration", "Integration", "API", "Troubleshooting", "Reporting"];
 
 export default function KnowledgeBase() {
+  const [articles, setArticles] = useState(articlesData);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const [articleFeedback, setArticleFeedback] = useState<Record<string, "yes" | "no">>({});
 
-  const filteredArticles = articlesData.filter((article) => {
+  const filteredArticles = articles.filter((article) => {
     const matchesSearch =
       article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       article.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -112,6 +114,22 @@ export default function KnowledgeBase() {
     if (activeCategory === "All") return matchesSearch;
     return article.category === activeCategory && matchesSearch;
   });
+
+  const handleSelectArticle = (article: Article) => {
+    const nextArticle = { ...article, views: article.views + 1 };
+    setArticles((current) => current.map((item) => item.id === article.id ? nextArticle : item));
+    setSelectedArticle(nextArticle);
+  };
+
+  const handleFeedback = (value: "yes" | "no") => {
+    if (!selectedArticle || articleFeedback[selectedArticle.id]) return;
+    setArticleFeedback((current) => ({ ...current, [selectedArticle.id]: value }));
+    if (value === "yes") {
+      const updatedArticle = { ...selectedArticle, helpful: selectedArticle.helpful + 1 };
+      setArticles((current) => current.map((item) => item.id === selectedArticle.id ? updatedArticle : item));
+      setSelectedArticle(updatedArticle);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -189,13 +207,12 @@ export default function KnowledgeBase() {
               <Card className="p-4 border border-border bg-muted/30">
                 <p className="text-sm font-medium text-foreground mb-3">Was this article helpful?</p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={Boolean(articleFeedback[selectedArticle.id])} onClick={() => handleFeedback("yes")} className="flex items-center gap-2">
                     <ThumbsUp className="w-4 h-4" />
                     Yes
                   </Button>
-                  <Button variant="outline" size="sm">
-                    No
-                  </Button>
+                  <Button type="button" variant="outline" size="sm" disabled={Boolean(articleFeedback[selectedArticle.id])} onClick={() => handleFeedback("no")}>No</Button>
+                  {articleFeedback[selectedArticle.id] && <span className="self-center text-xs text-green-700">Thanks for the feedback.</span>}
                 </div>
               </Card>
             </div>
@@ -212,6 +229,13 @@ export default function KnowledgeBase() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 h-10"
             />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>{filteredArticles.length} article{filteredArticles.length === 1 ? "" : "s"} found</span>
+            {(searchTerm || activeCategory !== "All") && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchTerm(""); setActiveCategory("All"); }}>Clear filters</Button>
+            )}
           </div>
 
           {/* Category Tabs */}
@@ -235,7 +259,7 @@ export default function KnowledgeBase() {
                   {filteredArticles.map((article) => (
                     <Card
                       key={article.id}
-                      onClick={() => setSelectedArticle(article)}
+                      onClick={() => handleSelectArticle(article)}
                       className="p-4 border border-border hover:border-primary/30 hover:shadow-md transition-all duration-200 cursor-pointer group"
                     >
                       <div className="flex items-start justify-between mb-2">

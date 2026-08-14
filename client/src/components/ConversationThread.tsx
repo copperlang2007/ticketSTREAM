@@ -108,30 +108,76 @@ const toneOptions: Array<{ id: ReplyTone; label: string; description: string }> 
 ];
 
 export default function ConversationThread({ messages = conversationData }: { messages?: Message[] }) {
+  const [threadMessages, setThreadMessages] = useState(messages);
+  const [notes, setNotes] = useState(internalNotes);
   const [replyMessage, setReplyMessage] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [activeTab, setActiveTab] = useState("conversation");
+  const [ticketStatus, setTicketStatus] = useState<"open" | "resolved">("resolved");
+  const [isSending, setIsSending] = useState(false);
   const [replyTone, setReplyTone] = useState<ReplyTone>("empathetic");
   const [suggestion, setSuggestion] = useState("");
   const [suggestionError, setSuggestionError] = useState("");
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const suggestReply = trpc.ai.suggestReply.useMutation();
 
-  const customerContext = messages
+  const customerContext = threadMessages
     .filter((message) => message.role !== "internal")
     .slice(-6)
     .map(({ role, content }) => ({ role, content }));
 
   const handleSendReply = () => {
-    if (replyMessage.trim()) {
+    const content = replyMessage.trim();
+    if (!content || isSending) return;
+
+    setIsSending(true);
+    window.setTimeout(() => {
+      setThreadMessages((current) => [
+        ...current,
+        {
+          id: `msg-${Date.now()}`,
+          author: "Sarah Johnson",
+          role: "agent",
+          content,
+          timestamp: "just now",
+          avatar: "SJ",
+        },
+      ]);
       setReplyMessage("");
+      setTicketStatus("open");
+      setIsSending(false);
+      toast.success("Reply added to the conversation");
+    }, 350);
+  };
+
+  const handleSaveDraft = () => {
+    if (!replyMessage.trim()) {
+      toast("Start typing before saving a draft");
+      return;
     }
+    toast.success("Reply saved as a draft");
   };
 
   const handleAddNote = () => {
-    if (internalNote.trim()) {
-      setInternalNote("");
-    }
+    const content = internalNote.trim();
+    if (!content) return;
+    setNotes((current) => [
+      ...current,
+      {
+        id: `note-${Date.now()}`,
+        author: "Sarah Johnson",
+        content,
+        timestamp: "just now",
+      },
+    ]);
+    setInternalNote("");
+    toast.success("Internal note added");
+  };
+
+  const handleToggleStatus = () => {
+    const nextStatus = ticketStatus === "resolved" ? "open" : "resolved";
+    setTicketStatus(nextStatus);
+    toast.success(`Ticket marked ${nextStatus}`);
   };
 
   const handleGenerateSuggestion = async () => {
@@ -176,7 +222,8 @@ export default function ConversationThread({ messages = conversationData }: { me
           </div>
           <div className="flex gap-2">
             <Badge className="bg-red-100 text-red-700">Critical</Badge>
-            <Badge className="bg-green-100 text-green-700">Resolved</Badge>
+            <Badge className={ticketStatus === "resolved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>{ticketStatus === "resolved" ? "Resolved" : "Open"}</Badge>
+            <Button type="button" size="sm" variant="outline" onClick={handleToggleStatus}>{ticketStatus === "resolved" ? "Reopen" : "Resolve"}</Button>
           </div>
         </div>
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mt-4">
@@ -209,12 +256,12 @@ export default function ConversationThread({ messages = conversationData }: { me
 
         <TabsContent value="conversation" className="space-y-4 mt-4">
           <Card className="min-w-0 overflow-x-hidden p-4 sm:p-6 border border-border bg-muted/30 max-h-96 overflow-y-auto space-y-4">
-            {messages.length === 0 ? (
+            {threadMessages.length === 0 ? (
               <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/60 p-5 text-center">
                 <p className="text-sm font-semibold text-blue-900">No conversation context yet</p>
                 <p className="mt-1 text-xs text-blue-800/75">Add a customer message before asking TicketStream to draft a reply.</p>
               </div>
-            ) : messages.map((message) => (
+            ) : threadMessages.map((message) => (
               <div
                 key={message.id}
                 className={`flex min-w-0 flex-shrink-0 items-start gap-3 py-1 ${message.role === "customer" ? "justify-start" : "justify-end"}`}
@@ -344,14 +391,15 @@ export default function ConversationThread({ messages = conversationData }: { me
                 aria-label="Reply to customer"
               />
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button type="button" variant="outline">Save as Draft</Button>
+                <Button type="button" variant="outline" onClick={handleSaveDraft}>Save as Draft</Button>
                 <Button
                   type="button"
                   onClick={handleSendReply}
+                  disabled={isSending || !replyMessage.trim()}
                   className="bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2"
                 >
                   <Send className="w-4 h-4" />
-                  Send Reply
+                  {isSending ? "Sending…" : "Send Reply"}
                 </Button>
               </div>
             </div>
@@ -360,7 +408,7 @@ export default function ConversationThread({ messages = conversationData }: { me
 
         <TabsContent value="notes" className="space-y-4 mt-4">
           <Card className="p-6 border border-border bg-yellow-50/50 max-h-96 overflow-y-auto space-y-4">
-            {internalNotes.map((note) => (
+              {notes.map((note) => (
               <div key={note.id} className="border-l-4 border-yellow-400 pl-4 py-2">
                 <div className="flex items-center justify-between mb-1">
                   <p className="text-sm font-semibold text-foreground">{note.author}</p>
